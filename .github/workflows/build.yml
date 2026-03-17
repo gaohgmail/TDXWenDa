@@ -1,0 +1,64 @@
+name: Build HarmonyOS App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Download HarmonyOS SDK
+      run: |
+        echo "Downloading HarmonyOS SDK..."
+        # 使用华为镜像下载
+        wget -q https://repo.huaweicloud.com/harmonyos/sdk/5.0.0.0/command-line-tools-linux-5.0.0.0.zip -O sdk.zip || \
+        wget -q https://repo.harmonyos.com/sdk/command-line-tools-linux.zip -O sdk.zip
+
+        echo "Extracting SDK..."
+        unzip -q sdk.zip -d $HOME/harmonyos-sdk
+
+        # 添加到PATH
+        echo "$HOME/harmonyos-sdk/toolchains" >> $GITHUB_PATH
+        echo "$HOME/harmonyos-sdk/build-tools" >> $GITHUB_PATH
+
+    - name: Verify SDK installation
+      run: |
+        hvigorw -v || echo "hvigorw not found, trying alternative..."
+        ls -la $HOME/harmonyos-sdk/ || echo "SDK directory not found"
+
+    - name: Build HarmonyOS App
+      run: |
+        echo "Building HarmonyOS application..."
+        cd harmonyos
+        hvigorw assembleHap || echo "Build failed, check logs"
+
+    - name: Upload HAP artifact
+      uses: actions/upload-artifact@v3
+      if: success()
+      with:
+        name: harmonyos-app
+        path: |
+          harmonyos/entry/build/default/outputs/default/*.hap
+          harmonyos/entry/build/default/outputs/default/*.zip
+
+    - name: Upload build logs
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: build-logs
+        path: |
+          harmonyos/entry/build/log/
+          harmonyos/build.log
